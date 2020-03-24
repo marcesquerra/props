@@ -4,7 +4,7 @@ sealed trait Stream[A] { self =>
 
   def head: Option[(A, Stream[A])]
 
-//   def map[B](f: A => B): Stream[B]
+  def map[B](f: A => B): Stream[B]
 
 //   def +:(t: A): Stream[A]
 
@@ -46,7 +46,7 @@ trait InfiniteStream[A] extends Stream[A] {
     Some((item, tail()))
   }
 
-//   override def map[B](f: A => B): InfiniteStream[B]
+  override def map[B](f: A => B): InfiniteStream[B]
 
 //   override final def combine[B, R](that: Stream[B], c: (A, B) => R): Stream[R] =
 //     that match {
@@ -134,8 +134,8 @@ final class ComputedInfiniteStream[A](
   override final val directHead: (A, () => InfiniteStream[A]) =
     (item, tail)
 
-//   override final def map[B](f: A => B): InfiniteStream[B] =
-//     ComputedInfiniteStream(f(item), tail().map(f))
+  override final def map[B](f: A => B): InfiniteStream[B] =
+    ComputedInfiniteStream(f(item), tail().map(f))
 
 //   override final def +:(t: A): InfiniteStream[A] =
 //     ComputedInfiniteStream(t, this)
@@ -164,7 +164,7 @@ final class ComputedInfiniteStream[A](
 trait FiniteStream[A] extends Stream[A] {
 
   override def head: Option[(A, FiniteStream[A])]
-//   override def map[B](f: A => B): FiniteStream[B]
+  override def map[B](f: A => B): FiniteStream[B]
 
   def length: Int
 //   def ++(that: Stream[A]): Stream[A]
@@ -258,7 +258,8 @@ case class StreamSlice[A](
 //   def combine[B, R](that: Stream[B], c: (A, B) => R): FiniteStream[R] = ???
 //   def +:(t: A): Stream[A] = ???
 //   def as[B >: A]: Stream[B] = ???
-//   def map[B](f: A => B): FiniteStream[B] = ???
+  def map[B](f: A => B): FiniteStream[B] =
+    StreamSlice(headPointer.map(f), length)
 
   def take(n: Int): FiniteStream[A] =
     if (n < length) StreamSlice(headPointer, n)
@@ -330,8 +331,8 @@ case class MaterializedStream[A](items: List[A]) extends FiniteStream[A] {
   @inline override final def length: Int =
     items.length
 
-// //   override final def map[B](f: A => B): FiniteStream[B] =
-// //     FiniteStream(items.map(f))
+  override final def map[B](f: A => B): FiniteStream[B] =
+    MaterializedStream(items.map(f))
 
 // //   override final def ++(that: Stream[A]): Stream[A] =
 // //     that match {
