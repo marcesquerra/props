@@ -1,3 +1,5 @@
+import scala.collection.mutable.StringBuilder
+
 sealed trait Stream[A] { self =>
 
   def head: Option[(A, Stream[A])]
@@ -6,7 +8,7 @@ sealed trait Stream[A] { self =>
 
 //   def +:(t: A): Stream[A]
 
-//   def take(n: Int): FiniteStream[A]
+  def take(n: Int): FiniteStream[A]
 
 //   def combine[B, R](that: Stream[B], c: (A, B) => R): Stream[R]
 
@@ -26,6 +28,9 @@ sealed trait Stream[A] { self =>
       hOpt = tail.head
     }
   }
+
+  override def toString(): String =
+    take(5).mkString("[", ", ", "...")
 
 }
 
@@ -76,8 +81,8 @@ trait InfiniteStream[A] extends Stream[A] {
 //   override def +:(t: A): InfiniteStream[A] =
 //     Stream.pure(t) ++ this
 
-//   override final def take(n: Int): FiniteStream[A] =
-//     StreamSlice(this, n)
+  override final def take(n: Int): FiniteStream[A] =
+    StreamSlice(this, n)
 
 //   override final def as[B >: A]: InfiniteStream[B] =
 //     this.asInstanceOf[InfiniteStream[B]]
@@ -116,18 +121,18 @@ trait InfiniteStream[A] extends Stream[A] {
 // // //     map(f).flatten
 }
 
-// object ComputedInfiniteStream {
-//   def apply[A](head: A, tail: => InfiniteStream[A]): ComputedInfiniteStream[A] =
-//     new ComputedInfiniteStream(head, () => tail)
-// }
+object ComputedInfiniteStream {
+  def apply[A](head: A, tail: => InfiniteStream[A]): ComputedInfiniteStream[A] =
+    new ComputedInfiniteStream(head, () => tail)
+}
 
-// final class ComputedInfiniteStream[A](
-//     override val item: A,
-//     override val tail: () => InfiniteStream[A]
-// ) extends InfiniteStream[A] { self =>
+final class ComputedInfiniteStream[A](
+    override val item: A,
+    override val tail: () => InfiniteStream[A]
+) extends InfiniteStream[A] { self =>
 
-//   override final val directHead: (A, () => InfiniteStream[A]) =
-//     (item, tail)
+  override final val directHead: (A, () => InfiniteStream[A]) =
+    (item, tail)
 
 //   override final def map[B](f: A => B): InfiniteStream[B] =
 //     ComputedInfiniteStream(f(item), tail().map(f))
@@ -135,7 +140,7 @@ trait InfiniteStream[A] extends Stream[A] {
 //   override final def +:(t: A): InfiniteStream[A] =
 //     ComputedInfiniteStream(t, this)
 
-// }
+}
 
 // case class InfiniteStreamConcat[A](a: FiniteStream[A], b: InfiniteStream[A])
 //     extends InfiniteStream[A] {
@@ -161,7 +166,7 @@ trait FiniteStream[A] extends Stream[A] {
   override def head: Option[(A, FiniteStream[A])]
 //   override def map[B](f: A => B): FiniteStream[B]
 
-//   def length: Int
+  def length: Int
 //   def ++(that: Stream[A]): Stream[A]
 //   def ++(that: InfiniteStream[A]): InfiniteStream[A]
 //   def ++(that: FiniteStream[A]): FiniteStream[A]
@@ -180,7 +185,7 @@ trait FiniteStream[A] extends Stream[A] {
 //   final def zip[B](that: FiniteStream[B]): FiniteStream[(A, B)] =
 //     combine[B, (A, B)](that, _ -> _)
 
-//   final def isEmpty: Boolean = length <= 0
+  final def isEmpty: Boolean = length <= 0
 
   def fold[Z](z: Z)(op: (Z, A) => Z): Z = {
     var acc = z
@@ -192,25 +197,51 @@ trait FiniteStream[A] extends Stream[A] {
     }
     acc
   }
+
+  @inline def addString(
+      b: StringBuilder,
+      start: String,
+      sep: String,
+      end: String
+  ): StringBuilder = {
+    val r = b.append(start)
+    head match {
+      case Some((h, cont)) => fold(r.append(h))(_.append(sep).append(_))
+      case None            =>
+    }
+    r.append(end)
+    r
+  }
+
+  @inline final def addString(b: StringBuilder, sep: String): StringBuilder =
+    addString(b, "", sep, "")
+
+  @inline final def addString(b: StringBuilder): StringBuilder =
+    addString(b, "")
+
+  @inline final def mkString(start: String, sep: String, end: String): String =
+    addString(new StringBuilder(), start, sep, end).result()
+
+  override final def toString(): String =
+    if (length <= 5)
+      take(5).mkString("[", ", ", "]")
+    else
+      take(5).mkString("[", ", ", "...")
+
 }
 
-// // object StreamSlice {
-// //   def apply[A](headPointer: InfiniteStream[A], length: Int): StreamSlice[A] =
-// //     ???
-// // }
+case class StreamSlice[A](
+    headPointer: InfiniteStream[A],
+    override val length: Int
+) extends FiniteStream[A] {
 
-// case class StreamSlice[A](
-//     headPointer: InfiniteStream[A],
-//     override val length: Int
-// ) extends FiniteStream[A] {
-
-//   def head: Option[(A, FiniteStream[A])] =
-//     if (isEmpty) None
-//     else
-//       Some {
-//         val (t, ts) = headPointer.directHead
-//         (t, StreamSlice(ts(), length - 1))
-//       }
+  def head: Option[(A, FiniteStream[A])] =
+    if (isEmpty) None
+    else
+      Some {
+        val (t, ts) = headPointer.directHead
+        (t, StreamSlice(ts(), length - 1))
+      }
 
 //   def :+(t: A): FiniteStream[A] = this ++ Stream.pure(t)
 
@@ -228,9 +259,12 @@ trait FiniteStream[A] extends Stream[A] {
 //   def +:(t: A): Stream[A] = ???
 //   def as[B >: A]: Stream[B] = ???
 //   def map[B](f: A => B): FiniteStream[B] = ???
-//   def take(n: Int): FiniteStream[A] = ???
 
-// }
+  def take(n: Int): FiniteStream[A] =
+    if (n < length) StreamSlice(headPointer, n)
+    else this
+
+}
 
 // case class FiniteStreamConcat[A](
 //     a: FiniteStream[A],
@@ -293,6 +327,9 @@ case class MaterializedStream[A](items: List[A]) extends FiniteStream[A] {
   override final def head: Option[(A, FiniteStream[A])] =
     items.headOption.map(t => (t, MaterializedStream(items.tail)))
 
+  @inline override final def length: Int =
+    items.length
+
 // //   override final def map[B](f: A => B): FiniteStream[B] =
 // //     FiniteStream(items.map(f))
 
@@ -318,8 +355,8 @@ case class MaterializedStream[A](items: List[A]) extends FiniteStream[A] {
 // //   override final def :+(t: A): FiniteStream[A] =
 // //     FiniteStream(items :+ t)
 
-// //   override final def take(n: Int): FiniteStream[A] =
-// //     FiniteStream(items.take(n))
+  override final def take(n: Int): FiniteStream[A] =
+    MaterializedStream(items.take(n))
 
 // //   override final def zip[B](that: Stream[B]): FiniteStream[(A, B)] =
 // //     that match {
@@ -351,30 +388,25 @@ case class MaterializedStream[A](items: List[A]) extends FiniteStream[A] {
 
 // //   override final def as[B >: A]: FiniteStream[B] =
 // //     this.asInstanceOf[FiniteStream[B]]
+
 }
 
-// object Stream {
+object Stream {
 
-//   def pure[A](t: A): FiniteStream[A] =
-//     MaterializedStream(List(t))
+  def pure[A](t: A): FiniteStream[A] =
+    MaterializedStream(List(t))
 
-//   def intsFrom(i: Int): InfiniteStream[Int] =
-//     ComputedInfiniteStream(i, intsFrom(i + 1))
+  def intsFrom(i: Int): InfiniteStream[Int] =
+    ComputedInfiniteStream(i, intsFrom(i + 1))
 
-//   val BnsignedInts: InfiniteStream[Int] =
-//     intsFrom(0)
+  val UnsignedInts: InfiniteStream[Int] =
+    intsFrom(0)
 
-// }
+}
 
 object Main extends App {
-  // val a = Stream.UnsignedInts.map(_ + 1)
-  // val b = Stream.UnsignedInts.map('a' + _).map(_.toChar)
-  // val c = a * b
-  // for {
-  //   t <- a.reverseInits.take(20)
-  // } println(t)
-
-  // println("Done")
+  println(Stream.UnsignedInts)
+  println(Stream.UnsignedInts.take(3))
 
   println(("\n" * 4) + "Cross Project example")
 }
