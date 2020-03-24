@@ -1,74 +1,70 @@
-// The simplest possible sbt build file is just one line:
-
-scalaVersion := "2.13.1"
-// That is, to create a valid sbt build, all you've got to do is define the
-// version of Scala you'd like your project to use.
-
-// ============================================================================
-
-// Lines like the above defining `scalaVersion` are called "settings". Settings
-// are key/value pairs. In the case of `scalaVersion`, the key is "scalaVersion"
-// and the value is "2.13.1"
-
-// It's possible to define many kinds of settings, such as:
-
-name := "hello-world"
-organization := "ch.epfl.scala"
-version := "1.0"
-
-// Note, it's not required for you to define these three settings. These are
-// mostly only necessary if you intend to publish your library's binaries on a
-// place like Sonatype or Bintray.
+lazy val scala213 = "2.13.1"
+lazy val scala212 = "2.12.10"
+lazy val scala211 = "2.11.12"
+lazy val allScalaVersions = List(scala213, scala212, scala211)
+lazy val nativeScalaVersions = List(scala211)
 
 
-// Want to use a published library in your project?
-// You can define other libraries as dependencies in your build like this:
-libraryDependencies += "org.typelevel" %% "cats-core" % "2.0.0"
-// Here, `libraryDependencies` is a set of dependencies, and by using `+=`,
-// we're adding the cats dependency to the set of dependencies that sbt will go
-// and fetch when it starts up.
-// Now, in any Scala file, you can import classes, objects, etc., from cats with
-// a regular import.
+val sharedSettings = Seq(
+    crossScalaVersions := {
+      if (crossProjectPlatform.value == NativePlatform)
+        nativeScalaVersions
+      else
+        allScalaVersions
+    }
+  , scalaVersion := scala211
+)
 
-// TIP: To find the "dependency" that you need to add to the
-// `libraryDependencies` set, which in the above example looks like this:
+lazy val root =
+  // select supported platforms
+  crossProject(JSPlatform, JVMPlatform, NativePlatform)
+    .crossType(CrossType.Pure) // [Pure, Full, Dummy], default: CrossType.Full
+    .in(file("."))
+    .settings(sharedSettings)
 
-// "org.typelevel" %% "cats-core" % "2.0.0"
+    .jsSettings( // defined in sbt-scalajs-crossproject
+      scalaJSUseMainModuleInitializer := true
+     )
+    .jvmSettings(/* ... */)
 
-// You can use Scaladex, an index of all known published Scala libraries. There,
-// after you find the library you want, you can just copy/paste the dependency
-// information that you need into your build file. For example, on the
-// typelevel/cats Scaladex page,
-// https://index.scala-lang.org/typelevel/cats, you can copy/paste the sbt
-// dependency from the sbt box on the right-hand side of the screen.
+    // configure Scala-Native settings
+    .nativeSettings( // defined in sbt-scala-native
+      nativeLTO := "thin"
+    )
 
-// IMPORTANT NOTE: while build files look _kind of_ like regular Scala, it's
-// important to note that syntax in *.sbt files doesn't always behave like
-// regular Scala. For example, notice in this build file that it's not required
-// to put our settings into an enclosing object or class. Always remember that
-// sbt is a bit different, semantically, than vanilla Scala.
+addCommandAlias("buildNative", "rootNative/nativeLink")
+addCommandAlias("buildFullNative", "+rootNative/nativeLink")
 
-// ============================================================================
+addCommandAlias("buildJS", "rootJS/compile")
+addCommandAlias("buildFullJS", "+rootJS/compile")
 
-// Most moderately interesting Scala projects don't make use of the very simple
-// build file style (called "bare style") used in this build.sbt file. Most
-// intermediate Scala projects make use of so-called "multi-project" builds. A
-// multi-project build makes it possible to have different folders which sbt can
-// be configured differently for. That is, you may wish to have different
-// dependencies or different testing frameworks defined for different parts of
-// your codebase. Multi-project builds make this possible.
+addCommandAlias("buildJVM", "rootJVM/compile")
+addCommandAlias("buildFullJVM", "+rootJVM/compile")
 
-// Here's a quick glimpse of what a multi-project build looks like for this
-// build, with only one "subproject" defined, called `root`:
+addCommandAlias("buildFull", "buildFullNative;buildFullJS;buildFullJVM")
 
-// lazy val root = (project in file(".")).
-//   settings(
-//     inThisBuild(List(
-//       organization := "ch.epfl.scala",
-//       scalaVersion := "2.13.1"
-//     )),
-//     name := "hello-world"
-//   )
 
-// To learn more about multi-project builds, head over to the official sbt
-// documentation at http://www.scala-sbt.org/documentation.html
+addCommandAlias("runNative", "rootNative/run")
+addCommandAlias("runFullNative", "+rootNative/run")
+
+addCommandAlias("runJS", "rootJS/run")
+addCommandAlias("runFullJS", "+rootJS/run")
+
+addCommandAlias("runJVM", "rootJVM/run")
+addCommandAlias("runFullJVM", "+rootJVM/run")
+
+addCommandAlias("runFull", "runFullNative;runFullJS;runFullJVM")
+
+
+addCommandAlias("testNative", "rootNative/test")
+addCommandAlias("testFullNative", "+rootNative/test")
+
+addCommandAlias("testJS", "rootJS/test")
+addCommandAlias("testFullJS", "+rootJS/test")
+
+addCommandAlias("testJVM", "rootJVM/test")
+addCommandAlias("testFullJVM", "+rootJVM/test")
+
+addCommandAlias("testFull", "testFullNative;testFullJS;testFullJVM")
+
+addCommandAlias("loop", "~;+rootNative/nativeLink;+rootJS/compile;+rootJVM/compile;runFullNative;runFullJS;runFullJVM")
